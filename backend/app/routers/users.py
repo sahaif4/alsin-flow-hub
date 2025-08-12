@@ -3,8 +3,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.security import OAuth2PasswordRequestForm
 from datetime import timedelta
 
-from .. import crud, schemas, security
+from .. import crud, models, schemas, security
 from ..db import get_db
+from ..dependencies import get_current_admin_user
+from typing import List
 
 router = APIRouter(
     prefix="/users",
@@ -57,3 +59,29 @@ async def login_for_access_token(
         data={"sub": user.email, "role": user.role.value}, expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}
+
+@router.get("/", response_model=List[schemas.User])
+async def read_users(
+    skip: int = 0,
+    limit: int = 100,
+    db: AsyncSession = Depends(get_db),
+    current_admin: models.User = Depends(get_current_admin_user),
+):
+    """
+    Retrieve all users. (Admin only)
+    """
+    return await crud.get_users(db, skip=skip, limit=limit)
+
+@router.post("/{user_id}/approve", response_model=schemas.User)
+async def approve_new_user(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_admin: models.User = Depends(get_current_admin_user),
+):
+    """
+    Approve a user's registration. (Admin only)
+    """
+    approved_user = await crud.approve_user(db, user_id=user_id)
+    if not approved_user:
+        raise HTTPException(status_code=404, detail="User not found or already approved.")
+    return approved_user

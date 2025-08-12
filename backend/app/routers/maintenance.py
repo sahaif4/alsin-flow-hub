@@ -30,7 +30,7 @@ async def create_new_maintenance_report(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
-@router.get("/", response_model=List[schemas.MaintenanceReport])
+@router.get("/all", response_model=List[schemas.MaintenanceReport])
 async def get_all_reports(
     skip: int = 0,
     limit: int = 100,

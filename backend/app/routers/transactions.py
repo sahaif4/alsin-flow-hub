@@ -40,6 +40,18 @@ async def read_my_transactions(
     """
     return await crud.get_user_transactions(db=db, user_id=current_user.id)
 
+@router.get("/all", response_model=List[schemas.Transaction])
+async def read_all_transactions(
+    skip: int = 0,
+    limit: int = 100,
+    db: AsyncSession = Depends(get_db),
+    current_admin: models.User = Depends(get_current_admin_user),
+):
+    """
+    Retrieve all transactions in the system. (Admin only)
+    """
+    return await crud.get_all_transactions(db, skip=skip, limit=limit)
+
 @router.post("/{transaction_id}/approve", response_model=schemas.Transaction)
 async def approve_borrow_request(
     transaction_id: int,
