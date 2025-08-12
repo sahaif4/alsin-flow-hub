@@ -48,6 +48,10 @@ class WorkLogBase(BaseModel):
     target_description: Optional[str] = None
     log_date: Optional[datetime] = None
 
+class NotificationBase(BaseModel):
+    message: str
+    link_url: Optional[str] = None
+
 # ==================
 # Create/Update Schemas
 # ==================
@@ -82,6 +86,9 @@ class PaymentCreate(PaymentBase):
 
 class WorkLogCreate(WorkLogBase):
     pass
+
+class NotificationCreate(NotificationBase):
+    user_id: int
 
 # ==================
 # Full Model Schemas (for API responses)
@@ -141,6 +148,24 @@ class WorkLog(WorkLogBase):
     class Config:
         from_attributes = True
 
+class Message(BaseModel):
+    id: int
+    sender_id: int
+    receiver_id: int
+    content: str
+    attachment_url: Optional[str] = None
+    created_at: datetime
+    class Config:
+        from_attributes = True
+
+class Notification(NotificationBase):
+    id: int
+    user_id: int
+    is_read: bool
+    created_at: datetime
+    class Config:
+        from_attributes = True
+
 # ==================
 # Schemas for Token
 # ==================
@@ -151,36 +176,3 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     email: Optional[str] = None
     role: Optional[str] = None
-
-# ==================
-# Schemas for Messages
-# ==================
-
-class MessageBase(BaseModel):
-    content: str
-    attachment_url: Optional[str] = None
-
-class MessageCreate(MessageBase):
-    receiver_id: int
-
-class Message(MessageBase):
-    id: int
-    sender_id: int
-    receiver_id: int
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-# ==================
-# Schemas for Reports
-# ==================
-
-class ToolUsageStat(BaseModel):
-    tool_name: str
-    transaction_count: int
-
-class FinancialReport(BaseModel):
-    total_income: float
-    year: int
-    month: int

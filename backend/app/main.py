@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from .db import engine
 from .models import Base
-from .routers import users, tools, transactions, maintenance, work_logs, rentals, chat, reports # Import the routers
+from .routers import users, tools, transactions, maintenance, work_logs, rentals, chat, reports, notifications # Import the routers
 
 # Create a FastAPI app instance
 app = FastAPI(
@@ -19,6 +19,7 @@ app.include_router(work_logs.router)
 app.include_router(rentals.router)
 app.include_router(chat.router)
 app.include_router(reports.router)
+app.include_router(notifications.router)
 
 
 @app.on_event("startup")

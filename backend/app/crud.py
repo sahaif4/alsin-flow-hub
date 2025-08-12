@@ -75,7 +75,7 @@ async def delete_tool(db: AsyncSession, tool_id: int) -> bool:
     return False
 
 from sqlalchemy.orm import selectinload
-from sqlalchemy import or_, extract, func
+from sqlalchemy import or_, extract, func, update
 
 # ==================
 # Transaction CRUD
@@ -149,6 +149,16 @@ async def approve_transaction(db: AsyncSession, transaction_id: int) -> models.T
         db_transaction.status = models.TransactionStatus.APPROVED
         await db.commit()
         await db.refresh(db_transaction)
+
+        # Create notification for the user
+        await create_notification(
+            db,
+            notification=schemas.NotificationCreate(
+                user_id=db_transaction.user_id,
+                message=f"Permintaan peminjaman Anda untuk alat '{db_transaction.tool.name}' telah disetujui.",
+                link_url=f"/transactions/{db_transaction.id}"
+            )
+        )
     return db_transaction
 
 async def reject_transaction(db: AsyncSession, transaction_id: int) -> models.Transaction | None:
@@ -163,6 +173,16 @@ async def reject_transaction(db: AsyncSession, transaction_id: int) -> models.Tr
 
         await db.commit()
         await db.refresh(db_transaction)
+
+        # Create notification for the user
+        await create_notification(
+            db,
+            notification=schemas.NotificationCreate(
+                user_id=db_transaction.user_id,
+                message=f"Permintaan peminjaman Anda untuk alat '{db_transaction.tool.name}' telah ditolak.",
+                link_url=f"/transactions/{db_transaction.id}"
+            )
+        )
     return db_transaction
 
 # ==========================
@@ -222,6 +242,41 @@ async def assign_technician_to_report(db: AsyncSession, report_id: int, technici
         report.status = models.MaintenanceStatus.IN_PROGRESS
         await db.commit()
         await db.refresh(report)
+
+        # Create notification for the assigned technician
+        await create_notification(
+            db,
+            notification=schemas.NotificationCreate(
+                user_id=technician_id,
+                message=f"Anda telah ditugaskan untuk laporan perbaikan pada alat '{report.tool.name}'.",
+                link_url=f"/maintenance/{report.id}"
+            )
+        )
+    return report
+
+async def resolve_maintenance_report(db: AsyncSession, report_id: int) -> models.MaintenanceReport | None:
+    """Resolve a maintenance report and update tool status."""
+    report = await get_maintenance_report(db, report_id)
+    if report and report.status == models.MaintenanceStatus.IN_PROGRESS:
+        report.status = models.MaintenanceStatus.RESOLVED
+        report.resolved_at = func.now()
+
+        tool = await get_tool(db, report.tool_id)
+        if tool:
+            tool.status = models.ToolStatus.TERSEDIA
+
+        await db.commit()
+        await db.refresh(report)
+
+        # Create notification for the user who reported the issue
+        await create_notification(
+            db,
+            notification=schemas.NotificationCreate(
+                user_id=report.reporter_id,
+                message=f"Laporan perbaikan Anda untuk alat '{report.tool.name}' telah diselesaikan.",
+                link_url=f"/maintenance/{report.id}"
+            )
+        )
     return report
 
 # ==================
@@ -273,6 +328,50 @@ async def get_work_logs_by_user(db: AsyncSession, user_id: int, skip: int = 0, l
         .limit(limit)
     )
     return result.scalars().all()
+
+# =======================
+# Notification CRUD
+# =======================
+
+async def create_notification(db: AsyncSession, notification: schemas.NotificationCreate) -> models.Notification:
+    """Create a new notification."""
+    db_notification = models.Notification(**notification.model_dump())
+    db.add(db_notification)
+    await db.commit()
+    await db.refresh(db_notification)
+    return db_notification
+
+async def get_notifications_for_user(db: AsyncSession, user_id: int, skip: int = 0, limit: int = 30) -> list[models.Notification]:
+    """Get all notifications for a specific user."""
+    result = await db.execute(
+        select(models.Notification)
+        .filter(models.Notification.user_id == user_id)
+        .order_by(models.Notification.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+    return result.scalars().all()
+
+async def mark_notification_as_read(db: AsyncSession, notification_id: int, user_id: int) -> models.Notification | None:
+    """Mark a specific notification as read for a user."""
+    notification = await db.get(models.Notification, notification_id)
+    if not notification or notification.user_id != user_id:
+        return None
+
+    notification.is_read = True
+    await db.commit()
+    await db.refresh(notification)
+    return notification
+
+async def mark_all_notifications_as_read(db: AsyncSession, user_id: int) -> dict:
+    """Mark all unread notifications as read for a user."""
+    await db.execute(
+        update(models.Notification)
+        .where(models.Notification.user_id == user_id, models.Notification.is_read == False)
+        .values(is_read=True)
+    )
+    await db.commit()
+    return {"message": "All notifications marked as read"}
 
 # ==================
 # Message CRUD

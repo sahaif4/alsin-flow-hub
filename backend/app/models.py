@@ -10,6 +10,7 @@ from sqlalchemy import (
     JSON,
     ForeignKey,
     Numeric,
+    Boolean,
 )
 from sqlalchemy.orm import declarative_base, relationship
 
@@ -44,6 +45,7 @@ class User(Base):
     work_logs = relationship("WorkLog", back_populates="user")
     sent_messages = relationship("Message", foreign_keys="Message.sender_id", back_populates="sender")
     received_messages = relationship("Message", foreign_keys="Message.receiver_id", back_populates="receiver")
+    notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
 
 class ToolCategory(str, enum.Enum):
     OLAH_TANAH = "olah_tanah"
@@ -201,3 +203,18 @@ class Message(Base):
 
     sender = relationship("User", foreign_keys=[sender_id], back_populates="sent_messages")
     receiver = relationship("User", foreign_keys=[receiver_id], back_populates="received_messages")
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    message = Column(String, nullable=False)
+    is_read = Column(Boolean, default=False, nullable=False)
+    link_url = Column(String, nullable=True)
+
+    created_at = Column(DateTime, server_default=func.now())
+
+    user = relationship("User", back_populates="notifications")
